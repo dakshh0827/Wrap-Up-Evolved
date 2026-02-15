@@ -1,0 +1,162 @@
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { Trophy, ThumbsUp, MessageSquare, Star, Award, X, TrendingUp, Hexagon } from 'lucide-react';
+
+const API_BASE = 'http://localhost:5000/api';
+
+export default function Leaderboard() {
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, []);
+
+  const fetchLeaderboard = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await axios.get(`${API_BASE}/leaderboard/top`);
+      setLeaderboard(response.data || []);
+    } catch (err) {
+      console.error('Leaderboard fetch error:', err);
+      setError(err.response?.data?.error || 'Failed to load leaderboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleArticleClick = (article) => {
+    const articleId = article.id || article._id;
+    if (articleId) navigate(`/curated/${articleId}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full h-64 flex items-center justify-center bg-[#121214] border border-[#27272a] rounded-xl">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#10b981]"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-900/10 border border-red-900/50 rounded-xl p-6 text-center">
+        <p className="text-red-400 text-sm font-medium">{error}</p>
+      </div>
+    );
+  }
+
+  if (leaderboard.length === 0) return null;
+
+  const topThree = leaderboard.slice(0, 3);
+  const rest = leaderboard.slice(3);
+
+  const getRankStyle = (index) => {
+    if (index === 0) return { bg: 'bg-[#10b981]', text: 'text-black', label: '1st' };
+    if (index === 1) return { bg: 'bg-white', text: 'text-black', label: '2nd' };
+    return { bg: 'bg-[#27272a]', text: 'text-white', label: '3rd' };
+  };
+
+  return (
+    <div className="mb-16">
+      {/* Header */}
+      <div className="flex items-end justify-between mb-8 pb-4 border-b border-[#27272a]">
+        <div>
+          <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+            <Trophy className="w-6 h-6 text-[#10b981]" />
+            Community Top Picks
+          </h2>
+        </div>
+        <div className="text-zinc-500 text-sm font-mono">
+          Weekly Ranking
+        </div>
+      </div>
+
+      {/* Top 3 Podium Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        {topThree.map((article, index) => {
+            const style = getRankStyle(index);
+            return (
+            <div
+                key={article.id || article._id}
+                onClick={() => handleArticleClick(article)}
+                className="bg-[#121214] border border-[#27272a] rounded-xl overflow-hidden cursor-pointer hover:border-zinc-500 transition-all duration-300 flex flex-col"
+            >
+                <div className="relative h-40">
+                    <img
+                        src={article.imageUrl}
+                        alt={article.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                    <div className={`absolute top-4 left-4 ${style.bg} ${style.text} font-bold px-3 py-1 rounded-md text-xs shadow-lg`}>
+                        {style.label} Place
+                    </div>
+                </div>
+
+                <div className="p-5 flex flex-col flex-grow">
+                    <h3 className="font-bold text-white text-lg mb-2 line-clamp-2 leading-snug">
+                        {article.title}
+                    </h3>
+                    
+                    <div className="mt-auto flex items-center gap-4 text-xs font-mono text-zinc-400 pt-4 border-t border-[#27272a]">
+                        <div className="flex items-center gap-1.5">
+                            <ThumbsUp className="w-3.5 h-3.5 text-[#10b981]" />
+                            <span>{article.upvotes}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span>{article.commentCount}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            );
+        })}
+      </div>
+
+      {/* List View for Rest */}
+      {rest.length > 0 && (
+        <div className="space-y-3">
+            <h3 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-4">Runner Ups</h3>
+            {rest.map((article) => (
+                <div
+                key={article.id || article._id}
+                onClick={() => handleArticleClick(article)}
+                className="group bg-[#121214] border border-[#27272a] hover:bg-[#18181b] hover:border-[#10b981] rounded-lg p-4 cursor-pointer transition-all duration-200 flex items-center gap-4"
+                >
+                <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-[#18181b] rounded border border-[#27272a] text-zinc-400 font-mono text-sm group-hover:text-[#10b981]">
+                    #{article.rank}
+                </div>
+
+                <div className="flex-grow min-w-0">
+                    <h3 className="text-white font-medium text-sm truncate pr-4 group-hover:text-[#10b981] transition-colors">
+                        {article.title}
+                    </h3>
+                    <div className="flex items-center gap-3 mt-1">
+                        <span className="text-xs text-zinc-500 flex items-center gap-1">
+                            <Star className="w-3 h-3" /> Score: {article.score}
+                        </span>
+                        <span className="text-xs text-zinc-500">
+                             by {article.curatorName || 'Anon'}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="flex-shrink-0 hidden sm:block">
+                    <div className="flex items-center gap-1 text-zinc-400 text-xs bg-[#18181b] px-3 py-1.5 rounded border border-[#27272a]">
+                        <ThumbsUp className="w-3 h-3" />
+                        {article.upvotes}
+                    </div>
+                </div>
+                </div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
