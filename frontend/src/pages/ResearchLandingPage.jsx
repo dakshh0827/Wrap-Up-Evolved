@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import axios from "axios";
 import { 
   Brain, Sparkles, Search, BarChart3, 
-  Globe, Zap, Shield, Link2, Database 
+  Globe, Zap, Shield, Link2, Scale
 } from "lucide-react";
 
 const API_BASE = 'http://localhost:5000/api';
@@ -153,10 +153,10 @@ export default function ResearchLandingPage() {
         {/* Legacy Links */}
         <div className="flex justify-center gap-6 mb-24">
             <button 
-              onClick={() => navigate("/research-list")}
+              onClick={() => navigate("/compare")}
               className="text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-[#10b981] transition-colors flex items-center gap-2 group"
             >
-              <Database className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" /> Browse Archive
+              <Scale className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" /> Comparator
             </button>
             <button 
               onClick={() => navigate("/legacy")}

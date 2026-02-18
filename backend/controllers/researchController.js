@@ -303,9 +303,7 @@ export const getAllResearch = async (req, res, next) => {
           curatorName: true,
           onChain: true,
           upvotes: true,
-          createdAt: true
-        },
-        include: {
+          createdAt: true,
           _count: {
             select: { comments: true }
           }

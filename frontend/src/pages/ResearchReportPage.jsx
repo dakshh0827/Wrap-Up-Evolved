@@ -22,7 +22,7 @@ import {
   FileText, ThumbsUp, Hexagon, Link2, Share2
 } from "lucide-react";
 
-const API_BASE = 'https://wrap-up.onrender.com/api';
+const API_BASE = 'http://localhost:5000/api';
 
 const SENTIMENT_COLORS = {
   Positive: "#10b981",
@@ -609,7 +609,7 @@ export default function ResearchReportPage() {
           </section>
         )}
 
-        {/* Visualizations - Continue from previous file... */}
+        {/* Visualizations */}
         <section className="grid lg:grid-cols-2 gap-6 mb-8">
           {/* Sentiment Distribution */}
           <div className="bg-[#121214] border border-[#27272a] rounded-xl p-6">
@@ -736,8 +736,6 @@ export default function ResearchReportPage() {
           </section>
         )}
 
-        {/* Comparative Analysis, Consensus sections, and Source Details - Keep from original file */}
-        {/* ... (copy remaining sections from previous ResearchReportPage.jsx) ... */}
         {/* Comparative Analysis */}
         <section className="bg-[#121214] border border-[#27272a] rounded-xl p-8 mb-8">
           <h2 className="text-2xl font-bold mb-6">Comparative Analysis</h2>
@@ -870,6 +868,154 @@ export default function ResearchReportPage() {
             </div>
           )}
         </section>
+
+        {/* ─── SOURCE COMPARISON REPORT ─────────────────────────────────── */}
+        {research.sourceComparisonReport && (
+          <section className="bg-[#121214] border border-[#27272a] rounded-xl p-8 mb-8">
+            <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
+              <BarChart3 className="w-6 h-6 text-[#10b981]" />
+              Source Comparison Report
+            </h2>
+            <p className="text-zinc-500 text-sm mb-8">
+              AI-rated comparison of every source analyzed for this report.
+            </p>
+
+            {/* Ratings Table */}
+            <div className="overflow-x-auto mb-8">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#27272a]">
+                    {['#', 'Source', 'Platform', 'Credibility', 'Depth', 'Bias', 'Uniqueness', 'Notes'].map(
+                      (h) => (
+                        <th key={h} className="pb-3 pr-4 text-left text-zinc-500 font-medium text-xs uppercase tracking-wider">
+                          {h}
+                        </th>
+                      ),
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(research.sourceComparisonReport.sourceRatings || []).map((s) => {
+                    const isRecommended = (research.sourceComparisonReport.recommendedReading || []).includes(s.index);
+                    return (
+                      <tr
+                        key={s.index}
+                        className={`border-b border-[#27272a] hover:bg-[#18181b] transition-colors ${isRecommended ? 'bg-[#10b981]/5' : ''}`}
+                      >
+                        <td className="py-3 pr-4 text-zinc-500 font-mono">{s.index}</td>
+                        <td className="py-3 pr-4 max-w-[180px]">
+                          <a 
+                            href={s.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#10b981] hover:underline flex items-center gap-1 text-xs"
+                          >
+                            <span className="truncate">{s.title?.substring(0, 35)}…</span>
+                            <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                          </a>
+                          {isRecommended && (
+                            <span className="text-[10px] bg-[#10b981]/20 text-[#10b981] px-1.5 py-0.5 rounded mt-1 inline-block">
+                              ★ Recommended
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-zinc-400 capitalize text-xs">{s.platform}</td>
+
+                        {/* Score bars */}
+                        {[
+                          { val: s.credibility, color: '#10b981' },
+                          { val: s.depth, color: '#3b82f6' },
+                        ].map((bar, i) => (
+                          <td key={i} className="py-3 pr-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-1.5 bg-[#27272a] rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{ width: `${bar.val * 10}%`, backgroundColor: bar.color }}
+                                />
+                              </div>
+                              <span className="text-xs text-zinc-300 font-mono">{bar.val}/10</span>
+                            </div>
+                          </td>
+                        ))}
+
+                        <td className="py-3 pr-4">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded font-medium ${
+                              s.bias === 'Low'
+                                ? 'bg-green-900/30 text-green-400'
+                                : s.bias === 'High'
+                                ? 'bg-red-900/30 text-red-400'
+                                : 'bg-yellow-900/30 text-yellow-400'
+                            }`}
+                          >
+                            {s.bias}
+                          </span>
+                        </td>
+
+                        <td className="py-3 pr-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-1.5 bg-[#27272a] rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-purple-500"
+                                style={{ width: `${s.uniqueness * 10}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-zinc-300 font-mono">{s.uniqueness}/10</span>
+                          </div>
+                        </td>
+
+                        <td className="py-3 text-zinc-500 text-xs max-w-[160px]">
+                          <span className="line-clamp-2">{s.oneLiner}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Highlights row */}
+            <div className="grid md:grid-cols-3 gap-4 mb-6">
+              {research.sourceComparisonReport.mostCredibleSource && (
+                <div className="bg-[#10b981]/10 border border-[#10b981]/30 rounded-lg p-4">
+                  <div className="text-xs font-bold text-[#10b981] uppercase tracking-wider mb-2">
+                    🏆 Most Credible Source
+                  </div>
+                  <div className="text-white font-medium text-sm">
+                    #{research.sourceComparisonReport.mostCredibleSource.index}
+                  </div>
+                  <div className="text-zinc-400 text-xs mt-1">
+                    {research.sourceComparisonReport.mostCredibleSource.reason}
+                  </div>
+                </div>
+              )}
+              {research.sourceComparisonReport.mostUniqueSource && (
+                <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
+                  <div className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-2">
+                    💡 Most Unique Perspective
+                  </div>
+                  <div className="text-white font-medium text-sm">
+                    #{research.sourceComparisonReport.mostUniqueSource.index}
+                  </div>
+                  <div className="text-zinc-400 text-xs mt-1">
+                    {research.sourceComparisonReport.mostUniqueSource.reason}
+                  </div>
+                </div>
+              )}
+              {research.sourceComparisonReport.overallVerdict && (
+                <div className="bg-[#18181b] border border-[#27272a] rounded-lg p-4">
+                  <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                    📋 Overall Verdict
+                  </div>
+                  <div className="text-zinc-300 text-xs leading-relaxed">
+                    {research.sourceComparisonReport.overallVerdict}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Detailed Sources */}
         <section className="bg-[#121214] border border-[#27272a] rounded-xl p-8">

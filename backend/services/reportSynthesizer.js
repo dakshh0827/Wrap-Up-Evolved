@@ -13,22 +13,14 @@ const groq = new Groq({
 export async function synthesizeResearchReport(topic, sources) {
   try {
     console.log(`🧠 Synthesizing report for ${sources.length} sources...`);
-    
-    // Phase 1: Analyze each source individually
+
     const analyzedSources = await analyzeIndividualSources(sources, topic);
-    
-    // Phase 2: Generate comparative analysis
     const comparativeAnalysis = await generateComparativeAnalysis(analyzedSources, topic);
-    
-    // Phase 3: Identify consensus and contradictions
     const consensusMap = await identifyConsensusAndContradictions(analyzedSources, topic);
-    
-    // Phase 4: Generate executive summary and key insights
     const synthesis = await generateExecutiveSummary(topic, analyzedSources, comparativeAnalysis, consensusMap);
-    
-    // Phase 5: Create visualization data
     const visualizationData = generateVisualizationData(analyzedSources);
-    
+    const sourceComparisonReport = await generateSourceComparisonReport(analyzedSources, topic);
+
     return {
       executiveSummary: synthesis.executiveSummary,
       keyInsights: synthesis.keyInsights,
@@ -36,13 +28,13 @@ export async function synthesizeResearchReport(topic, sources) {
       comparativeAnalysis,
       consensusVsContradiction: consensusMap,
       visualizationData,
+      sourceComparisonReport, // NEW
       metadata: {
         totalSources: sources.length,
         analysisDepth: 'comprehensive',
-        generatedAt: new Date().toISOString()
-      }
+        generatedAt: new Date().toISOString(),
+      },
     };
-    
   } catch (error) {
     console.error('Report synthesis error:', error.message);
     throw new Error('Failed to synthesize report: ' + error.message);
@@ -420,4 +412,87 @@ function generateVisualizationData(analyzedSources) {
     thematicClusters: themeData,
     totalSources: analyzedSources.length
   };
+}
+
+// ADD THIS to the return object in synthesizeResearchReport():
+//   sourceComparisonReport: await generateSourceComparisonReport(analyzedSources, topic),
+
+/**
+ * NEW: Generate a per-source comparison table for the frontend report
+ */
+export async function generateSourceComparisonReport(analyzedSources, topic) {
+  try {
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a research analyst. Given multiple analyzed sources about a topic, produce a structured comparison report. 
+Rate each source on: Credibility (1-10), Depth (1-10), Bias (Low/Medium/High), Uniqueness (1-10).
+Also identify the single most credible source, the most unique perspective, and an overall verdict.
+Respond ONLY with valid JSON.`,
+        },
+        {
+          role: 'user',
+          content: `Topic: ${topic}
+
+Sources:
+${analyzedSources
+  .map(
+    (s, i) => `
+[${i + 1}] Platform: ${s.platform}
+Title: ${s.title}
+Main Argument: ${s.analysis?.mainArgument || 'N/A'}
+Sentiment: ${s.analysis?.sentiment || 'neutral'}
+Key Claims: ${(s.analysis?.keyClaims || []).join(' | ')}
+URL: ${s.url}
+`,
+  )
+  .join('\n')}
+
+Respond in JSON:
+{
+  "sourceRatings": [
+    {
+      "index": 1,
+      "title": "...",
+      "platform": "...",
+      "url": "...",
+      "credibility": 8,
+      "depth": 7,
+      "bias": "Low",
+      "uniqueness": 6,
+      "oneLiner": "Why this source stands out or falls short"
+    }
+  ],
+  "mostCredibleSource": { "index": 1, "reason": "..." },
+  "mostUniqueSource": { "index": 3, "reason": "..." },
+  "overallVerdict": "2-3 sentence synthesis of what the sources collectively show",
+  "recommendedReading": [1, 3]
+}`,
+        },
+      ],
+      temperature: 0.5,
+      response_format: { type: 'json_object' },
+    });
+
+    return JSON.parse(completion.choices[0].message.content);
+  } catch (error) {
+    console.error('Source comparison report error:', error.message);
+    return {
+      sourceRatings: analyzedSources.map((s, i) => ({
+        index: i + 1,
+        title: s.title,
+        platform: s.platform,
+        url: s.url,
+        credibility: 5,
+        depth: 5,
+        bias: 'Unknown',
+        uniqueness: 5,
+        oneLiner: 'Analysis unavailable',
+      })),
+      overallVerdict: 'Comparison analysis unavailable.',
+      recommendedReading: [1],
+    };
+  }
 }

@@ -6,49 +6,49 @@ import commentRoutes from './routes/commentRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import leaderboardRoutes from './routes/leaderboardRoutes.js';
 import researchRoutes from './routes/researchRoutes.js';
+import comparisonRoutes from './routes/comparisonRoutes.js';
 import errorHandler from './middlewares/errorHandler.js';
 
 const app = express();
 
-// Middleware
 app.use(
   cors({
-    origin: ['https://wrap-up-one.vercel.app', 'http://localhost:5173'], // Allow frontend
+    origin: [
+      'https://wrap-up-one.vercel.app',
+      'http://localhost:5173',
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
-  })
+  }),
 );
 
 app.use(express.json());
 
-// Routes
 app.use('/api/articles', articleRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/research', researchRoutes); // NEW: AI Research Engine
+app.use('/api/research', researchRoutes);
+app.use('/api/comparisons', comparisonRoutes);
 
-// Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     features: {
       aiResearch: true,
       linkCuration: true,
-      blockchain: true
-    }
+      blockchain: true,
+      articleComparator: true,
+    },
   });
 });
 
-// Error handler
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-
 app.listen(PORT, () => {
-  console.log(`🚀 Wrap-Up Backend v2.0 running on port ${PORT}`);
-  console.log(`📡 Health check: http://localhost:${PORT}/health`);
+  console.log(`🚀 Wrap-Up Backend v2.1 running on port ${PORT}`);
   console.log(`🔬 AI Research Engine: ENABLED`);
-  console.log(`📰 Legacy Link Curation: ENABLED`);
+  console.log(`⚖️  Article Comparator: ENABLED`);
 });

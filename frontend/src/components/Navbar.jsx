@@ -10,7 +10,7 @@ import toast from "react-hot-toast";
 import axios from "axios";
 import { 
   Menu, X, Star, Award, Link2, Layers, Check, ChevronRight, 
-  Brain, FileText, LogOut, Wallet 
+  Brain, FileText, LogOut, Wallet
 } from "lucide-react";
 
 const API_BASE = 'http://localhost:5000/api';
@@ -239,25 +239,26 @@ export default function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center gap-4">
-            <Link
-              to="/research-list"
-              className={`flex items-center gap-2 text-sm font-medium transition-colors ${
-                isActive('/research-list') ? 'text-[#10b981]' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Brain className="w-4 h-4" />
-              Research
-            </Link>
-            
-            <Link
-              to="/curated"
-              className={`flex items-center gap-2 text-sm font-medium transition-colors ${
-                isActive('/curated') ? 'text-[#10b981]' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              Articles
-            </Link>
+            {/* Desktop Navigation links — replace the existing link group */}
+          <Link
+            to="/research-list"
+            className={`flex items-center gap-2 text-sm font-medium transition-colors ${
+              isActive('/research-list') ? 'text-[#10b981]' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Brain className="w-4 h-4" />
+            Research
+          </Link>
+
+          <Link
+            to="/curated"
+            className={`flex items-center gap-2 text-sm font-medium transition-colors ${
+              isActive('/curated') ? 'text-[#10b981]' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            Articles
+          </Link>
             
             {isConnected && (
               <div className="flex items-center gap-4 pl-4 border-l border-[#27272a]">
