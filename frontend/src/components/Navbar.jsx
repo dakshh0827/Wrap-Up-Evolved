@@ -221,8 +221,8 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center transition-transform duration-300 group-hover:rotate-180 border border-white">
-              <Layers className="w-5 h-5 text-black" />
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center transition-transform duration-300 group-hover:rotate-180 bg-black">
+              <img src="/logo.png" alt="logo" width={40} />
             </div>
             <span className="text-xl font-bold text-white tracking-tight">
               Wrap-Up

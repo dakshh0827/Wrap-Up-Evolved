@@ -10,8 +10,8 @@ export default function Footer() {
           {/* Brand Section */}
           <div className="col-span-1">
             <Link to="/" className="flex items-center gap-3 mb-6 group">
-              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center transition-transform duration-300 group-hover:rotate-180">
-                <Layers className="w-5 h-5 text-black" />
+              <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center transition-transform duration-300 group-hover:rotate-180">
+                <img src="/logo.png" alt="logo" width={40} />
               </div>
               <span className="text-lg font-bold text-white tracking-tight">
                 Wrap-Up
