@@ -5,38 +5,38 @@ import { uploadToIPFS } from '../services/ipfs.js';
 
 const prisma = new PrismaClient();
 
-// Helper function to get user display name
+// ---------------------------------------------------------------------------
+// Helper: resolve a wallet address to a human-readable display name.
+// Falls back to a truncated address if no DB record exists.
+// ---------------------------------------------------------------------------
 const getUserDisplayName = async (walletAddress) => {
   try {
     if (!walletAddress || walletAddress.startsWith('anon_')) {
       return 'Anonymous';
     }
-    
-    const user = await prisma.user.findUnique({
-      where: { walletAddress }
-    });
-    
-    return user?.displayName || `${walletAddress.substring(0, 6)}...${walletAddress.substring(38)}`;
-  } catch (error) {
-    console.error('Error fetching user display name:', error);
+    const user = await prisma.user.findUnique({ where: { walletAddress } });
+    return user?.displayName
+      || `${walletAddress.substring(0, 6)}...${walletAddress.substring(38)}`;
+  } catch {
     return `${walletAddress.substring(0, 6)}...${walletAddress.substring(38)}`;
   }
 };
 
-// Get all curated articles (on-chain)
+// ---------------------------------------------------------------------------
+// GET /api/articles
+// Returns only on-chain articles (public feed).
+// ---------------------------------------------------------------------------
 export const getAllArticles = async (req, res, next) => {
   try {
     const articles = await prisma.article.findMany({
       where: { onChain: true },
       orderBy: { createdAt: 'desc' },
-      include: { 
+      include: {
         comments: {
           where: { parentId: null },
-          include: {
-            replies: true
-          }
-        }
-      }
+          include: { replies: true },
+        },
+      },
     });
     res.json(articles);
   } catch (error) {
@@ -44,104 +44,122 @@ export const getAllArticles = async (req, res, next) => {
   }
 };
 
-// Get article by ID
-export const getArticleById = async (req, res, next) => {
+// ---------------------------------------------------------------------------
+// GET /api/articles/all
+// Returns ALL articles including pending (off-chain). Used by CuratedArticlesPage.
+// ---------------------------------------------------------------------------
+export const getAllArticlesIncludingPending = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    
-    console.log('📖 Fetching article with ID:', id);
-    
-    const article = await prisma.article.findUnique({
-      where: { id },
-      include: { 
+    const articles = await prisma.article.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
         comments: {
-          where: { parentId: null }, // Only top-level comments
-          orderBy: { createdAt: 'desc' },
-          include: {
-            replies: {
-              orderBy: { createdAt: 'asc' }
-            }
-          }
-        }
-      }
+          where: { parentId: null },
+          include: { replies: true },
+        },
+      },
     });
-    
-    if (!article) {
-      return res.status(404).json({ error: "Article not found" });
-    }
-    
-    console.log(`✅ Found article with ${article.comments?.length || 0} comments`);
-    
-    res.json(article);
+    res.json(articles);
   } catch (error) {
-    console.error('Get article error:', error);
     next(error);
   }
 };
 
-// Get article by URL
+// ---------------------------------------------------------------------------
+// GET /api/articles/by-url?url=...
+// Look up a single article by its original URL.
+// ---------------------------------------------------------------------------
 export const getArticleByUrl = async (req, res, next) => {
   try {
     const { url } = req.query;
-    
     if (!url) {
-      return res.status(400).json({ error: 'URL parameter is required' });
+      return res.status(400).json({ error: 'url query parameter is required' });
     }
-    
+
     const article = await prisma.article.findUnique({
       where: { articleUrl: url },
-      include: { 
+      include: {
         comments: {
           where: { parentId: null },
-          include: {
-            replies: true
-          }
-        }
-      }
+          include: { replies: true },
+        },
+      },
     });
-    
+
     if (!article) {
-      return res.status(404).json({ error: "Article not found" });
+      return res.status(404).json({ error: 'Article not found' });
     }
-    
+
     res.json(article);
   } catch (error) {
     next(error);
   }
 };
 
-// STEP 1: Scrape and summarize article
+// ---------------------------------------------------------------------------
+// GET /api/articles/:id
+// Single article with nested comments.
+// ---------------------------------------------------------------------------
+export const getArticleById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    console.log('📖 Fetching article:', id);
+
+    const article = await prisma.article.findUnique({
+      where: { id },
+      include: {
+        comments: {
+          where: { parentId: null },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            replies: { orderBy: { createdAt: 'asc' } },
+          },
+        },
+      },
+    });
+
+    if (!article) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
+
+    console.log(`✅ Article found, ${article.comments?.length ?? 0} top-level comments`);
+    res.json(article);
+  } catch (error) {
+    console.error('getArticleById error:', error);
+    next(error);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// POST /api/articles/scrape
+// STEP 1 — Scrape URL and AI-summarize. Nothing is persisted yet.
+// ---------------------------------------------------------------------------
 export const scrapeAndSummarize = async (req, res, next) => {
   try {
     const { url } = req.body;
-    
+
     if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
+      return res.status(400).json({ error: 'url is required' });
     }
-    
+
     try {
       new URL(url);
-    } catch (e) {
+    } catch {
       return res.status(400).json({ error: 'Invalid URL format' });
     }
-    
-    const existing = await prisma.article.findUnique({
-      where: { articleUrl: url }
-    });
-    
+
+    // Reject duplicate URLs early so the frontend can handle it gracefully.
+    const existing = await prisma.article.findUnique({ where: { articleUrl: url } });
     if (existing) {
-      return res.status(400).json({ 
-        error: 'Article already curated', 
-        article: existing 
-      });
+      return res.status(400).json({ error: 'Article already curated', article: existing });
     }
-    
-    console.log('🔍 Scraping article:', url);
+
+    console.log('🔍 Scraping:', url);
     const scrapedData = await scrapeArticle(url);
-    
-    console.log('🤖 Summarizing article...');
+
+    console.log('🤖 Summarizing...');
     const summaryData = await summarizeArticle(scrapedData);
-    
+
     res.status(200).json({
       message: 'Article scraped and summarized successfully',
       preview: {
@@ -156,50 +174,47 @@ export const scrapeAndSummarize = async (req, res, next) => {
         cardJson: summaryData.cardJson,
         author: scrapedData.author,
         publisher: scrapedData.publisher,
-        date: scrapedData.date
-      }
+        date: scrapedData.date,
+      },
     });
   } catch (error) {
-    console.error('Scrape error:', error.message);
+    console.error('scrapeAndSummarize error:', error.message);
     next(error);
   }
 };
 
-// STEP 2: Prepare article for curation
+// ---------------------------------------------------------------------------
+// POST /api/articles/prepare
+// STEP 2 — Persist the scraped preview to MongoDB with onChain: false.
+// ---------------------------------------------------------------------------
 export const prepareArticleForCuration = async (req, res, next) => {
   try {
-    const { 
-      title, 
-      summary, 
+    const {
+      title,
+      summary,
       detailedSummary,
       condensedContent,
       keyPoints,
       statistics,
-      imageUrl, 
-      articleUrl, 
-      cardJson, 
-      author, 
-      publisher, 
-      date 
+      imageUrl,
+      articleUrl,
+      cardJson,
+      author,
+      publisher,
+      date,
     } = req.body;
-    
+
     if (!articleUrl || !title || !summary) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'articleUrl, title and summary are required' });
     }
-    
-    const existing = await prisma.article.findUnique({
-      where: { articleUrl }
-    });
-    
+
+    // Return existing record instead of erroring so the frontend flow can resume.
+    const existing = await prisma.article.findUnique({ where: { articleUrl } });
     if (existing) {
-      return res.status(400).json({ 
-        error: 'Article already exists',
-        article: existing 
-      });
+      return res.status(400).json({ error: 'Article already exists', article: existing });
     }
-    
-    console.log('💾 Saving to database...');
-    
+
+    console.log('💾 Saving article to database...');
     const article = await prisma.article.create({
       data: {
         title,
@@ -208,185 +223,178 @@ export const prepareArticleForCuration = async (req, res, next) => {
         fullContent: condensedContent || '',
         keyPoints: keyPoints || [],
         statistics: statistics || [],
-        imageUrl,
+        imageUrl: imageUrl || null,
         articleUrl,
-        cardJson,
+        cardJson: cardJson || null,
         ipfsHash: null,
         onChain: false,
-        upvotedBy: []
-      }
+        upvotedBy: [],
+      },
     });
-    
+
     console.log('✅ Article saved:', article.id);
-    
-    res.json({ 
-      article,
-      message: 'Article saved to database (blockchain integration pending)'
-    });
+    res.json({ article, message: 'Article saved to database (blockchain pending)' });
   } catch (error) {
-    console.error('Database save error:', error.message);
+    console.error('prepareArticleForCuration error:', error.message);
     next(error);
   }
 };
 
-// STEP 3: Mark article as on-chain
+// ---------------------------------------------------------------------------
+// POST /api/articles/upload-ipfs
+// STEP 3a — Pin article metadata to IPFS via Pinata.
+// ---------------------------------------------------------------------------
+export const uploadArticleToIPFS = async (req, res, next) => {
+  try {
+    const articleData = req.body;
+
+    if (!articleData || !articleData.title || !articleData.articleUrl) {
+      return res.status(400).json({ error: 'Missing required article data (title, articleUrl)' });
+    }
+
+    console.log(`📤 Uploading "${articleData.title.substring(0, 40)}..." to IPFS`);
+    const ipfsHash = await uploadToIPFS(articleData);
+    console.log('✅ IPFS hash:', ipfsHash);
+
+    // If the article already exists in the DB, update its ipfsHash.
+    await prisma.article.updateMany({
+      where: { articleUrl: articleData.articleUrl },
+      data: { ipfsHash },
+    });
+
+    res.json({ ipfsHash });
+  } catch (error) {
+    console.error('uploadArticleToIPFS error:', error.message);
+    next(error);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// POST /api/articles/mark-onchain
+// STEP 3b — Called AFTER the blockchain tx confirms.
+// Updates the DB record to onChain: true with the on-chain article ID.
+// ---------------------------------------------------------------------------
 export const markOnChain = async (req, res, next) => {
   try {
     const { articleUrl, articleId, curator, ipfsHash } = req.body;
-    
+
     if (!articleUrl || !articleId || !curator || !ipfsHash) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({
+        error: 'articleUrl, articleId, curator and ipfsHash are all required',
+      });
     }
-    
-    // Get curator's display name
+
     const curatorName = await getUserDisplayName(curator);
-    
+
     const updated = await prisma.article.update({
       where: { articleUrl },
-      data: { 
-        onChain: true, 
-        articleId: parseInt(articleId),
+      data: {
+        onChain: true,
+        articleId: parseInt(articleId, 10),
         curator,
         curatorName,
-        ipfsHash
-      }
+        ipfsHash,
+      },
     });
-    
-    console.log('✅ Article marked as on-chain:', articleUrl);
+
+    console.log('⛓  Article marked on-chain:', articleUrl);
     res.json(updated);
   } catch (error) {
-    console.error('Mark on-chain error:', error.message);
+    console.error('markOnChain error:', error.message);
     next(error);
   }
 };
 
-// Upvote article (wallet-optional)
+// ---------------------------------------------------------------------------
+// POST /api/articles/upvote
+// DB-level upvote (wallet-optional). Blockchain upvote is handled on-chain;
+// this keeps a local record of who upvoted for display purposes.
+// ---------------------------------------------------------------------------
 export const upvoteArticle = async (req, res, next) => {
   try {
     const { articleId, userId } = req.body;
-    
+
     if (!articleId || !userId) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'articleId and userId are required' });
     }
-    
-    const article = await prisma.article.findUnique({
-      where: { id: articleId }
-    });
-    
+
+    const article = await prisma.article.findUnique({ where: { id: articleId } });
     if (!article) {
       return res.status(404).json({ error: 'Article not found' });
     }
-    
-    // Check if already upvoted
+
     const upvotedByArray = Array.isArray(article.upvotedBy) ? article.upvotedBy : [];
-    const hasUpvoted = upvotedByArray.some(vote => 
+    const hasUpvoted = upvotedByArray.some((vote) =>
       typeof vote === 'string' ? vote === userId : vote.address === userId
     );
-    
+
     if (hasUpvoted) {
       return res.status(400).json({ error: 'Already upvoted this article' });
     }
-    
-    // Get user's display name
+
     const displayName = await getUserDisplayName(userId);
-    
-    // Add upvote with user info
     const newUpvote = {
       address: userId,
       name: displayName,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
-    
+
     const updated = await prisma.article.update({
       where: { id: articleId },
       data: {
         upvotes: { increment: 1 },
-        upvotedBy: { push: newUpvote }
-      }
+        upvotedBy: { push: newUpvote },
+      },
     });
-    
-    res.json({ 
-      success: true, 
-      upvotes: updated.upvotes,
-      message: 'Upvote recorded'
-    });
+
+    res.json({ success: true, upvotes: updated.upvotes });
   } catch (error) {
-    console.error('Upvote error:', error.message);
+    console.error('upvoteArticle error:', error.message);
     next(error);
   }
 };
 
-// Sync upvotes from blockchain
+// ---------------------------------------------------------------------------
+// POST /api/articles/sync-upvotes
+// Overwrite the DB upvote count with the authoritative on-chain value.
+// ---------------------------------------------------------------------------
 export const syncUpvotes = async (req, res, next) => {
   try {
     const { articleUrl, upvotes } = req.body;
-    
+
     if (!articleUrl || upvotes === undefined) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'articleUrl and upvotes are required' });
     }
-    
+
     const updated = await prisma.article.update({
       where: { articleUrl },
-      data: { upvotes: parseInt(upvotes) }
+      data: { upvotes: parseInt(upvotes, 10) },
     });
-    
+
     res.json(updated);
   } catch (error) {
     next(error);
   }
 };
 
-// Delete article
+// ---------------------------------------------------------------------------
+// DELETE /api/articles/:id
+// Remove a DB record. Blocked if the article is already on-chain.
+// ---------------------------------------------------------------------------
 export const deleteArticle = async (req, res, next) => {
   try {
     const { id } = req.params;
-    
-    await prisma.article.delete({
-      where: { id }
-    });
-    
-    res.json({ message: 'Article deleted successfully' });
-  } catch (error) {
-    next(error);
-  }
-};
 
-// Get ALL articles (including pending)
-export const getAllArticlesIncludingPending = async (req, res, next) => {
-  try {
-    const articles = await prisma.article.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: { 
-        comments: {
-          where: { parentId: null },
-          include: {
-            replies: true
-          }
-        }
-      }
-    });
-    res.json(articles);
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Upload article to IPFS
-export const uploadArticleToIPFS = async (req, res, next) => {
-  try {
-    const articleData = req.body; 
-    
-    if (!articleData || !articleData.title || !articleData.articleUrl) {
-      return res.status(400).json({ error: 'Missing article data' });
+    const article = await prisma.article.findUnique({ where: { id } });
+    if (!article) {
+      return res.status(404).json({ error: 'Article not found' });
     }
-    
-    console.log(`📤 Uploading ${articleData.title.substring(0, 30)}... to IPFS...`);
-    
-    const ipfsHash = await uploadToIPFS(articleData);
-    
-    console.log(`✅ IPFS Upload successful: ${ipfsHash}`);
-    
-    res.json({ ipfsHash });
+    if (article.onChain) {
+      return res.status(400).json({ error: 'Cannot delete an on-chain article' });
+    }
+
+    await prisma.article.delete({ where: { id } });
+    res.json({ message: 'Article deleted successfully' });
   } catch (error) {
     next(error);
   }

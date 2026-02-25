@@ -3,285 +3,236 @@ import { uploadToIPFS } from '../services/ipfs.js';
 
 const prisma = new PrismaClient();
 
-/**
- * Helper function to get user display name
- */
+// ---------------------------------------------------------------------------
+// Helper: resolve wallet address → display name
+// ---------------------------------------------------------------------------
 const getUserDisplayName = async (walletAddress) => {
   try {
-    if (!walletAddress || walletAddress.startsWith('anon_')) {
-      return 'Anonymous';
-    }
-    
-    const user = await prisma.user.findUnique({
-      where: { walletAddress }
-    });
-    
-    return user?.displayName || `${walletAddress.substring(0, 6)}...${walletAddress.substring(38)}`;
-  } catch (error) {
-    console.error('Error fetching user display name:', error);
+    if (!walletAddress || walletAddress.startsWith('anon_')) return 'Anonymous';
+    const user = await prisma.user.findUnique({ where: { walletAddress } });
+    return user?.displayName
+      || `${walletAddress.substring(0, 6)}...${walletAddress.substring(38)}`;
+  } catch {
     return `${walletAddress.substring(0, 6)}...${walletAddress.substring(38)}`;
   }
 };
 
-/**
- * Add comment to research (supports nested replies)
- */
+// ---------------------------------------------------------------------------
+// POST /api/research/comments
+// Add a comment (or reply) to a research report.
+// ---------------------------------------------------------------------------
 export const addResearchComment = async (req, res, next) => {
   try {
     const { researchId, content, author, authorName, parentId } = req.body;
-    
+
     if (!researchId || !content || !author) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'researchId, content and author are required' });
     }
-    
-    // Validate research exists
-    const research = await prisma.research.findUnique({
-      where: { id: researchId }
-    });
-    
-    if (!research) {
-      return res.status(404).json({ error: 'Research not found' });
-    }
-    
-    // Validate parent comment exists if this is a reply
+
+    // Ensure the research report exists.
+    const research = await prisma.research.findUnique({ where: { id: researchId } });
+    if (!research) return res.status(404).json({ error: 'Research report not found' });
+
+    // Validate parent if replying.
     if (parentId) {
-      const parentComment = await prisma.researchComment.findUnique({
-        where: { id: parentId }
-      });
-      
-      if (!parentComment) {
-        return res.status(404).json({ error: 'Parent comment not found' });
-      }
+      const parent = await prisma.researchComment.findUnique({ where: { id: parentId } });
+      if (!parent) return res.status(404).json({ error: 'Parent comment not found' });
     }
-    
-    // Use provided authorName or fetch from database
-    const finalAuthorName = authorName || await getUserDisplayName(author);
-    
+
+    const finalAuthorName = authorName || (await getUserDisplayName(author));
+
     const comment = await prisma.researchComment.create({
-      data: { 
-        researchId, 
-        content, 
+      data: {
+        researchId,
+        content,
         author,
         authorName: finalAuthorName,
         parentId: parentId || null,
         onChain: false,
-        upvotedBy: []
+        upvotedBy: [],
       },
-      include: {
-        replies: true
-      }
+      include: { replies: true },
     });
-    
-    console.log(`✅ Research comment created with ID: ${comment.id}${parentId ? ` (reply to ${parentId})` : ''}`);
-    
-    res.status(201).json({ 
-      ...comment,
-      id: comment.id
-    });
+
+    console.log(`✅ ResearchComment ${comment.id} created${parentId ? ` (reply to ${parentId})` : ''}`);
+    res.status(201).json(comment);
   } catch (error) {
-    console.error('Add research comment error:', error);
+    console.error('addResearchComment error:', error);
     next(error);
   }
 };
 
-/**
- * Upload research comment to IPFS
- */
+// ---------------------------------------------------------------------------
+// POST /api/research/comments/upload-ipfs
+// Pin research comment metadata to IPFS.
+// ---------------------------------------------------------------------------
 export const uploadResearchCommentToIPFS = async (req, res, next) => {
   try {
     const { commentId, content, author, authorName, researchId } = req.body;
-    
+
     if (!commentId || !content || !author) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'commentId, content and author are required' });
     }
-    
-    // Use provided authorName or fetch from database
-    const finalAuthorName = authorName || await getUserDisplayName(author);
-    
+
+    const finalAuthorName = authorName || (await getUserDisplayName(author));
     const metadata = {
       content,
       author,
       authorName: finalAuthorName,
-      researchId,
-      timestamp: new Date().toISOString()
+      researchId: researchId || '',
+      timestamp: new Date().toISOString(),
     };
-    
+
     const ipfsHash = await uploadToIPFS(metadata);
-    
+
     await prisma.researchComment.update({
       where: { id: commentId },
-      data: { ipfsHash }
+      data: { ipfsHash },
     });
-    
-    console.log(`📤 Research comment ${commentId} uploaded to IPFS: ${ipfsHash}`);
-    
+
+    console.log(`📤 ResearchComment ${commentId} → IPFS: ${ipfsHash}`);
     res.json({ ipfsHash, commentId });
   } catch (error) {
-    console.error('Upload research comment to IPFS error:', error);
+    console.error('uploadResearchCommentToIPFS error:', error);
     next(error);
   }
 };
 
-/**
- * Mark research comment as on-chain
- */
+// ---------------------------------------------------------------------------
+// POST /api/research/comments/mark-onchain
+// Called AFTER the blockchain tx confirms. Stores the on-chain comment ID.
+// ---------------------------------------------------------------------------
 export const markResearchCommentOnChain = async (req, res, next) => {
   try {
     const { commentId, onChainCommentId, ipfsHash } = req.body;
-    
+
     if (!commentId || !onChainCommentId || !ipfsHash) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({
+        error: 'commentId, onChainCommentId and ipfsHash are required',
+      });
     }
-    
+
     const updated = await prisma.researchComment.update({
       where: { id: commentId },
-      data: { 
+      data: {
         onChain: true,
-        commentId: parseInt(onChainCommentId),
-        ipfsHash
-      }
+        commentId: parseInt(onChainCommentId, 10),
+        ipfsHash,
+      },
     });
-    
-    console.log(`⛓️ Research comment ${commentId} marked as on-chain with ID ${onChainCommentId}`);
-    
+
+    console.log(`⛓  ResearchComment ${commentId} on-chain as #${onChainCommentId}`);
     res.json(updated);
   } catch (error) {
-    console.error('Mark research comment on-chain error:', error);
+    console.error('markResearchCommentOnChain error:', error);
     next(error);
   }
 };
 
-/**
- * Get comments by research ID (with nested replies)
- */
+// ---------------------------------------------------------------------------
+// GET /api/research/comments/by-research?researchId=...
+// Top-level comments with nested replies.
+// ---------------------------------------------------------------------------
 export const getResearchComments = async (req, res, next) => {
   try {
     const { researchId } = req.query;
-    
+
     if (!researchId) {
-      return res.status(400).json({ error: 'researchId parameter is required' });
+      return res.status(400).json({ error: 'researchId query parameter is required' });
     }
-    
+
     const comments = await prisma.researchComment.findMany({
-      where: { 
-        researchId,
-        parentId: null
-      },
+      where: { researchId, parentId: null },
       orderBy: { createdAt: 'desc' },
       include: {
-        replies: {
-          orderBy: { createdAt: 'asc' }
-        }
-      }
+        replies: { orderBy: { createdAt: 'asc' } },
+      },
     });
-    
+
     res.json(comments);
   } catch (error) {
-    console.error('Get research comments error:', error);
+    console.error('getResearchComments error:', error);
     next(error);
   }
 };
 
-/**
- * Upvote research comment
- */
+// ---------------------------------------------------------------------------
+// GET /api/research/comments/:commentId/replies
+// ---------------------------------------------------------------------------
+export const getResearchCommentReplies = async (req, res, next) => {
+  try {
+    const { commentId } = req.params;
+
+    const replies = await prisma.researchComment.findMany({
+      where: { parentId: commentId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json(replies);
+  } catch (error) {
+    console.error('getResearchCommentReplies error:', error);
+    next(error);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// POST /api/research/comments/upvote
+// ---------------------------------------------------------------------------
 export const upvoteResearchComment = async (req, res, next) => {
   try {
     const { commentId, userId } = req.body;
-    
+
     if (!commentId || !userId) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'commentId and userId are required' });
     }
-    
-    const comment = await prisma.researchComment.findUnique({
-      where: { id: commentId }
-    });
-    
-    if (!comment) {
-      return res.status(404).json({ error: 'Comment not found' });
-    }
-    
-    // Check if already upvoted
+
+    const comment = await prisma.researchComment.findUnique({ where: { id: commentId } });
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
     const upvotedByArray = Array.isArray(comment.upvotedBy) ? comment.upvotedBy : [];
-    const hasUpvoted = upvotedByArray.some(vote => 
-      typeof vote === 'string' ? vote === userId : vote.address === userId
+    const hasUpvoted = upvotedByArray.some((v) =>
+      typeof v === 'string' ? v === userId : v.address === userId
     );
-    
-    if (hasUpvoted) {
-      return res.status(400).json({ error: 'Already upvoted this comment' });
-    }
-    
-    // Get user's display name
+    if (hasUpvoted) return res.status(400).json({ error: 'Already upvoted this comment' });
+
     const displayName = await getUserDisplayName(userId);
-    
-    // Add upvote with user info
-    const newUpvote = {
-      address: userId,
-      name: displayName,
-      timestamp: new Date().toISOString()
-    };
-    
     const updated = await prisma.researchComment.update({
       where: { id: commentId },
       data: {
         upvotes: { increment: 1 },
-        upvotedBy: { push: newUpvote }
-      }
+        upvotedBy: {
+          push: { address: userId, name: displayName, timestamp: new Date().toISOString() },
+        },
+      },
     });
-    
-    res.json({ 
-      success: true, 
-      upvotes: updated.upvotes,
-      message: 'Upvote recorded'
-    });
+
+    res.json({ success: true, upvotes: updated.upvotes });
   } catch (error) {
-    console.error('Upvote research comment error:', error.message);
+    console.error('upvoteResearchComment error:', error.message);
     next(error);
   }
 };
 
-/**
- * Sync research comment upvotes from blockchain
- */
+// ---------------------------------------------------------------------------
+// POST /api/research/comments/sync-upvotes
+// ---------------------------------------------------------------------------
 export const syncResearchCommentUpvotes = async (req, res, next) => {
   try {
     const { commentId, upvotes } = req.body;
-    
+
     if (!commentId || upvotes === undefined) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'commentId and upvotes are required' });
     }
-    
-    console.log(`🔄 Syncing upvotes for research comment ${commentId}: ${upvotes}`);
-    
+
     const updated = await prisma.researchComment.update({
       where: { id: commentId },
-      data: { upvotes: parseInt(upvotes) }
+      data: { upvotes: parseInt(upvotes, 10) },
     });
-    
-    console.log(`✅ Research comment ${commentId} upvotes synced: ${upvotes}`);
-    
+
+    console.log(`🔄 ResearchComment ${commentId} upvotes synced → ${upvotes}`);
     res.json(updated);
   } catch (error) {
-    console.error('Sync research comment upvotes error:', error);
-    next(error);
-  }
-};
-
-/**
- * Get all replies for a research comment
- */
-export const getResearchCommentReplies = async (req, res, next) => {
-  try {
-    const { commentId } = req.params;
-    
-    const replies = await prisma.researchComment.findMany({
-      where: { parentId: commentId },
-      orderBy: { createdAt: 'asc' }
-    });
-    
-    res.json(replies);
-  } catch (error) {
-    console.error('Get research comment replies error:', error);
+    console.error('syncResearchCommentUpvotes error:', error);
     next(error);
   }
 };

@@ -3,25 +3,21 @@ import * as commentController from '../controllers/commentController.js';
 
 const router = express.Router();
 
-// Add comment (supports replies)
+// ============================================================
+// CRITICAL: Fixed-path routes MUST come before /:commentId
+// ============================================================
+
+// --- POST routes ---
 router.post('/', commentController.addComment);
-
-// Upload comment to IPFS
 router.post('/upload-ipfs', commentController.uploadCommentToIPFS);
-
-// Mark comment as on-chain
 router.post('/mark-onchain', commentController.markCommentOnChain);
-
-// Get comments by article URL
-router.get('/by-article', commentController.getCommentsByArticleUrl);
-
-// Get replies for a comment
-router.get('/:commentId/replies', commentController.getCommentReplies);
-
-// Upvote comment (wallet-optional for testing)
 router.post('/upvote', commentController.upvoteComment);
-
-// Sync comment upvotes from blockchain
 router.post('/sync-upvotes', commentController.syncCommentUpvotes);
+
+// --- Fixed-path GET routes BEFORE /:commentId ---
+router.get('/by-article', commentController.getCommentsByArticleUrl);  // ?articleUrl=...
+
+// --- Parameterized routes LAST ---
+router.get('/:commentId/replies', commentController.getCommentReplies);
 
 export default router;
