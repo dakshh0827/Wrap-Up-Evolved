@@ -6,7 +6,25 @@ import { arbitrumSepolia, baseSepolia, foundry } from 'wagmi/chains';
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
 
 // 2. Put all supported chains in an array
-const chains = [arbitrumSepolia, baseSepolia, foundry];
+const creditcoinTestnet = {
+  id: 102031,
+  name: 'Creditcoin Testnet',
+  network: 'Creditcoin Testnet',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'tCTC',
+    symbol: 'tCTC',
+  },
+  rpcUrls: {
+    public: { http: ['https://rpc.cc3-testnet.creditcoin.network'] },
+    default: { http: ['https://rpc.cc3-testnet.creditcoin.network'] },
+  },
+  blockExplorers: {
+    default: { name: 'Blockscout', url: 'https://creditcoin-testnet.blockscout.com' },
+  },
+};
+const chains = [arbitrumSepolia, baseSepolia, foundry, creditcoinTestnet];
+
 
 const metadata = {
   name: 'Wrap-Up',
@@ -25,7 +43,7 @@ createWeb3Modal({
   wagmiConfig,
   projectId,
   // This just sets the initial UI view, it does NOT lock the app
-  defaultChain: baseSepolia, 
+  defaultChain: creditcoinTestnet, 
   themeMode: 'dark',
 });
 
@@ -34,18 +52,21 @@ export const CONTRACT_ADDRESSES = {
   31337: "0x5FbDB2315678afecb367f032d93F642f64180aa3", // Anvil
   84532: import.meta.env.VITE_BASE_WRAPUP,            // Base Sepolia
   421614: import.meta.env.VITE_ARB_WRAPUP,            // Arbitrum Sepolia
+  102031: "0x1e9f2F91E0673E3313C68b49a2262814C7d8921e", // <-- Add Creditcoin Address
 };
 
 export const WUPToken_ADDRESSES = {
   31337: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
   84532: import.meta.env.VITE_BASE_TOKEN,
   421614: import.meta.env.VITE_ARB_TOKEN,
+  102031: "0xA5123b6D0e67b634DA8DC118DE99F72f24B6A33a", // <-- Add Creditcoin Address
 };
 
 export const WUPClaimer_ADDRESSES = {
   31337: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
   84532: import.meta.env.VITE_BASE_CLAIMER,
   421614: import.meta.env.VITE_ARB_CLAIMER,
+  102031: "0x0b8Fe0D4e677E6a99b2B47b2F34A0e0D85240C24", // <-- Add Creditcoin Address
 };
 
 // 4. Paste your newly extracted ABIs here

@@ -10,10 +10,7 @@ contract Deploy is Script {
     function run() external {
         // By default, this uses Anvil's Account #0 private key for local testing
         // For real testnets, you will pass your actual private key in the .env file
-        uint256 deployerPrivateKey = vm.envOr(
-            "PRIVATE_KEY", 
-            uint256(0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80)
-        );
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
 
         vm.startBroadcast(deployerPrivateKey);
