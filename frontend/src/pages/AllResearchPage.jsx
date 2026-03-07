@@ -25,10 +25,19 @@ export default function AllResearchPage() {
     try {
       setLoading(true);
       const response = await axios.get(`${API_BASE}/research?page=${page}&limit=12`);
-      setResearch(response.data.research);
-      setTotalPages(response.data.pagination.totalPages);
+
+      const data = response.data;
+
+      // Defensive: handle various possible response shapes
+      const items = data?.research ?? data?.results ?? data?.data ?? (Array.isArray(data) ? data : []);
+      const pages = data?.pagination?.totalPages ?? data?.totalPages ?? 1;
+
+      setResearch(items);
+      setTotalPages(pages);
     } catch (error) {
       console.error('Failed to load research:', error);
+      setResearch([]);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
