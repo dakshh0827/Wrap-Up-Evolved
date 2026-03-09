@@ -53,7 +53,7 @@ We utilized the **Chainlink Runtime Environment (CRE)** as the critical orchestr
 Instead of trusting a centralized backend to rate articles, we built a CRE Workflow that simulates a decentralized oracle network (DON) fetching the IPFS content and evaluating it via an AI Agent. The workflow then verifiably executes the `updateAIScore` function on our smart contract.
 
 **Links to all files that use Chainlink:**
-* 🧠 **The CRE Workflow Simulation:** [`/wrapup-cre/ai-audit/main.ts`](./wrapup-cre/ai-audit/main.ts) *(This file contains the TypeScript logic executed by the CRE CLI to trigger the AI evaluation and format the on-chain payload).*
+* 🧠 **The CRE Workflow Simulation:** [`/wrapup-cre/ai-audit/main.ts`](./cre-workflow/wrapup-cre/ai-audit/main.ts) *(This file contains the TypeScript logic executed by the CRE CLI to trigger the AI evaluation and format the on-chain payload).*
 * 📜 **The Smart Contract Receiver:** [`/contracts/src/WrapUp.sol`](./contracts/src/WrapUp.sol) *(See lines defining `articleAIScores` mapping and the `updateAIScore` function).*
 * 🖥️ **The Frontend Verification:** [`/frontend/src/components/ArticleCard.jsx`](./frontend/src/components/ArticleCard.jsx) *(See the Wagmi `useReadContract` hook that polls the blockchain for the Chainlink-delivered AI Score).*
 
