@@ -18,6 +18,7 @@ app.use(
       'http://localhost:5173',
       'https://wrap-up-evolved.vercel.app',
       'https://wrap-up-polkadot.vercel.app',
+      'https://wrap-up-injective.vercel.app',
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
